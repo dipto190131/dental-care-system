@@ -2,8 +2,11 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import http from "http";
 
-const DJANGO_HOST = "127.0.0.1";
-const DJANGO_PORT = 8000;
+// Allow Django backend to be configured via environment variables
+// For local development: localhost:8000
+// For Railway with separate service: external service URL
+const DJANGO_HOST = process.env.DJANGO_HOST || "127.0.0.1";
+const DJANGO_PORT = parseInt(process.env.DJANGO_PORT || "8000", 10);
 
 function proxyToDjango(req: Request, res: Response) {
   const rawBody: Buffer | undefined = (req as any).rawBody as Buffer | undefined;
