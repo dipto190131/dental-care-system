@@ -66,10 +66,10 @@ migrate.on('close', (code) => {
   const startExpress = () => {
     console.log('🚀 Starting Express server...');
     
-    const express = spawn('npm', ['run', 'start'], {
+    const express = spawn('node', ['dist/index.cjs'], {
       cwd: PROJECT_ROOT,
       stdio: 'inherit',
-      shell: true,
+      shell: false,
       env: { ...process.env, NODE_ENV: 'production' },
     });
 
