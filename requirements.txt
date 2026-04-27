@@ -1,0 +1,13 @@
+# Python Dependencies for DentalCare System
+# Install with: pip install -r requirements.txt
+
+bcrypt>=5.0.0
+django>=5.2.11
+django-cors-headers>=4.9.0
+psycopg2-binary>=2.9.11
+gunicorn>=25.1.0
+
+# Optional: AI/ML dependencies (if needed)
+# google-genai>=1.65.0
+# google-generativeai>=0.8.6
+# groq>=1.0.0
