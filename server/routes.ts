@@ -1,12 +1,14 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import http from "http";
+import https from "https";
 
 // Allow Django backend to be configured via environment variables
 // For local development: localhost:8000
-// For Railway with separate service: external service URL
+// For Render: django-backend.onrender.com:443
 const DJANGO_HOST = process.env.DJANGO_HOST || "127.0.0.1";
 const DJANGO_PORT = parseInt(process.env.DJANGO_PORT || "8000", 10);
+const USE_HTTPS = DJANGO_PORT === 443 || process.env.DJANGO_HTTPS === "true";
 
 function proxyToDjango(req: Request, res: Response) {
   const rawBody: Buffer | undefined = (req as any).rawBody as Buffer | undefined;
@@ -39,7 +41,10 @@ function proxyToDjango(req: Request, res: Response) {
     headers: headersToForward,
   };
 
-  const proxyReq = http.request(options, (proxyRes) => {
+  // Use HTTPS for remote backends (like Render), HTTP for localhost
+  const httpLib = USE_HTTPS ? https : http;
+  
+  const proxyReq = httpLib.request(options, (proxyRes) => {
     console.log(`[proxy] ← ${proxyRes.statusCode}`);
     res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
     proxyRes.pipe(res, { end: true });

@@ -3,34 +3,40 @@ const path = require('path');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
-console.log('📁 Project root:', PROJECT_ROOT);
-console.log('� Checking for Python...');
+console.log('Project root:', PROJECT_ROOT);
+console.log('Environment:', process.env.NODE_ENV || 'development');
 
-// Try to detect if Python is available
-const checkPython = spawn('which', ['python3'], {
-  shell: true,
-  stdio: 'pipe'
-});
+// On Render: only run Express (Django runs separately)
+// On Local/Railway: try to start Django if Python available
+const isDjangoHost = process.env.DJANGO_HOST === '127.0.0.1' || 
+                     process.env.DJANGO_HOST === 'localhost' || 
+                     !process.env.DJANGO_HOST;
 
-let pythonAvailable = false;
+if (isDjangoHost) {
+  console.log('Checking for Python...');
+  const checkPython = spawn('which', ['python3'], {
+    shell: true,
+    stdio: 'pipe'
+  });
 
-checkPython.on('close', (code) => {
-  pythonAvailable = code === 0;
-  
-  if (pythonAvailable) {
-    console.log('✅ Python found! Starting Django...');
-    startDjango();
-  } else {
-    console.log('⚠️  Python not found. Django will NOT run.');
-    console.log('📝 Set DJANGO_HOST and DJANGO_PORT env vars to point to external Django backend');
-    console.log('🚀 Starting Express server only...');
-    startExpress();
-  }
-});
+  checkPython.on('close', (code) => {
+    if (code === 0) {
+      console.log('Python found! Attempting to start Django...');
+      startDjango();
+    } else {
+      console.log('Warning: Python not found. Django will NOT run.');
+      console.log('For Render: Set DJANGO_HOST and DJANGO_PORT to backend service URL');
+      startExpressOnly();
+    }
+  });
+} else {
+  console.log('Using remote Django backend:', process.env.DJANGO_HOST);
+  startExpressOnly();
+}
 
 const startDjango = () => {
   const BACKEND_DIR = path.join(PROJECT_ROOT, 'backend');
-  console.log('📦 Installing Python dependencies...');
+  console.log('Installing Python dependencies...');
   
   const pip = spawn('pip3', ['install', '-q', '-r', 'requirements.txt'], {
     cwd: BACKEND_DIR,
@@ -40,18 +46,18 @@ const startDjango = () => {
   
   pip.on('close', (code) => {
     if (code !== 0) {
-      console.warn('⚠️  Failed to install Python deps, continuing anyway...');
+      console.warn('Warning: Failed to install Python deps, continuing anyway...');
     }
     
-    console.log('🗄️  Running Django migrations...');
+    console.log('Running Django migrations...');
     const migrate = spawn('python3', ['manage.py', 'migrate', '--run-syncdb'], {
       cwd: BACKEND_DIR,
       stdio: 'inherit',
       shell: true
     });
     
-    migrate.on('close', (migCode) => {
-      console.log('⏳ Starting Django backend...');
+    migrate.on('close', () => {
+      console.log('Starting Django backend...');
       const django = spawn('python3', ['-m', 'gunicorn', 'dental_care.wsgi:application', '--bind', '127.0.0.1:8000', '--workers', '2', '--timeout', '60', '--access-logfile', '-'], {
         cwd: BACKEND_DIR,
         stdio: 'inherit',
@@ -59,21 +65,22 @@ const startDjango = () => {
       });
       
       django.on('error', (err) => {
-        console.error('❌ Django failed:', err);
+        console.error('Django error:', err.message);
       });
       
       global.djangoProcess = django;
       
-      // Start Express after a short delay
+      // Start Express after delay
       setTimeout(() => {
-        console.log('🚀 Starting Express server...');
-        startExpress();
+        startExpressOnly();
       }, 2000);
     });
   });
 };
 
-const startExpress = () => {
+const startExpressOnly = () => {
+  console.log('Starting Express server...');
+  
   const express = spawn('node', ['dist/index.cjs'], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit',
@@ -82,7 +89,7 @@ const startExpress = () => {
   });
 
   express.on('error', (err) => {
-    console.error('❌ Express failed to start:', err);
+    console.error('Express error:', err.message);
     process.exit(1);
   });
 
@@ -93,7 +100,7 @@ const startExpress = () => {
   });
 };
 
-// Cleanup on exit
+// Cleanup
 process.on('SIGINT', () => {
   console.log('Shutting down...');
   if (global.djangoProcess) global.djangoProcess.kill();
@@ -105,4 +112,3 @@ process.on('SIGTERM', () => {
   if (global.djangoProcess) global.djangoProcess.kill();
   process.exit(0);
 });
-
