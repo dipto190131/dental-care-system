@@ -10,7 +10,7 @@ console.log('📁 Backend dir:', BACKEND_DIR);
 console.log('🗄️  Running Django migrations...');
 
 // Run migrations first
-const migrate = spawn('python', ['manage.py', 'migrate', '--run-syncdb'], {
+const migrate = spawn('python3', ['manage.py', 'migrate', '--run-syncdb'], {
   cwd: BACKEND_DIR,
   stdio: 'inherit',
   shell: true,
@@ -26,7 +26,7 @@ migrate.on('close', (code) => {
   console.log('⏳ Starting Django backend...');
 
   // Start Django
-  const django = spawn('python', ['-m', 'gunicorn', 'dental_care.wsgi:application', '--bind', '0.0.0.0:8000', '--workers', '4', '--timeout', '120', '--access-logfile', '-', '--error-logfile', '-'], {
+  const django = spawn('python3', ['-m', 'gunicorn', 'dental_care.wsgi:application', '--bind', '0.0.0.0:8000', '--workers', '4', '--timeout', '120', '--access-logfile', '-', '--error-logfile', '-'], {
     cwd: BACKEND_DIR,
     stdio: 'inherit',
     shell: true,
