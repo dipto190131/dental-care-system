@@ -23,7 +23,10 @@ function proxyToDjango(req: Request, res: Response) {
     if (key.toLowerCase() === "transfer-encoding") continue;
     headersToForward[key] = val;
   }
-  headersToForward["host"] = `${DJANGO_HOST}:${DJANGO_PORT}`;
+  // For HTTPS on port 443, don't include the port in the Host header
+  headersToForward["host"] = USE_HTTPS && DJANGO_PORT === 443 
+    ? DJANGO_HOST 
+    : `${DJANGO_HOST}:${DJANGO_PORT}`;
 
   if (isJson) {
     if (rawBody && rawBody.length > 0) {
