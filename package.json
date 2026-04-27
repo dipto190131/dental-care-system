@@ -8,7 +8,7 @@
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "dev:windows": "set NODE_ENV=development && tsx server/index.ts",
     "build": "tsx script/build.ts",
-    "start": "node server/startup.js",
+    "start": "node server/startup.cjs",
     "start:express": "cross-env NODE_ENV=production node dist/index.cjs",
     "start:windows": "set NODE_ENV=production && node dist/index.cjs",
     "check": "tsc",
