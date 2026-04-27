@@ -1,17 +1,24 @@
 const { spawn } = require('child_process');
 const http = require('http');
+const path = require('path');
 
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const BACKEND_DIR = path.join(PROJECT_ROOT, 'backend');
+
+console.log('📁 Project root:', PROJECT_ROOT);
+console.log('📁 Backend dir:', BACKEND_DIR);
 console.log('🗄️  Running Django migrations...');
 
 // Run migrations first
-const migrate = spawn('python', ['backend/manage.py', 'migrate', '--run-syncdb'], {
+const migrate = spawn('python', ['manage.py', 'migrate', '--run-syncdb'], {
+  cwd: BACKEND_DIR,
   stdio: 'inherit',
   shell: true,
 });
 
 migrate.on('close', (code) => {
   if (code !== 0) {
-    console.error('❌ Migration failed!');
+    console.error('❌ Migration failed with code:', code);
     process.exit(1);
   }
 
@@ -20,7 +27,7 @@ migrate.on('close', (code) => {
 
   // Start Django
   const django = spawn('python', ['-m', 'gunicorn', 'dental_care.wsgi:application', '--bind', '0.0.0.0:8000', '--workers', '4', '--timeout', '120', '--access-logfile', '-', '--error-logfile', '-'], {
-    cwd: 'backend',
+    cwd: BACKEND_DIR,
     stdio: 'inherit',
     shell: true,
   });
@@ -30,75 +37,68 @@ migrate.on('close', (code) => {
     process.exit(1);
   });
 
-  // Wait a bit for Django to start
+  // Wait for Django to start
   console.log('⏸️  Waiting for Django to be ready...');
-  setTimeout(() => {
-    // Check if Django is responding
-    let attempts = 0;
-    const checkDjango = () => {
-      const req = http.get('http://127.0.0.1:8000/api/health', (res) => {
-        if (res.statusCode === 200 || res.statusCode === 404) {
-          console.log('✅ Django is ready!');
-          console.log('🚀 Starting Express server...');
-          
-          // Start Express
-          const express = spawn('npm', ['run', 'start'], {
-            stdio: 'inherit',
-            shell: true,
-          });
+  let attempts = 0;
+  
+  const checkDjango = () => {
+    const req = http.get('http://127.0.0.1:8000/', (res) => {
+      console.log('✅ Django is ready! (HTTP ' + res.statusCode + ')');
+      startExpress();
+      req.abort();
+    });
 
-          express.on('error', (err) => {
-            console.error('❌ Express failed to start:', err);
-            process.exit(1);
-          });
-
-          express.on('close', (code) => {
-            console.log('Express exited with code', code);
-            django.kill();
-            process.exit(code);
-          });
-        } else {
-          checkAgain();
-        }
-      });
-
-      req.on('error', () => {
-        checkAgain();
-      });
-    };
-
-    const checkAgain = () => {
+    req.on('error', () => {
       attempts++;
-      if (attempts < 10) {
-        setTimeout(checkDjango, 1000);
+      if (attempts < 30) {
+        setTimeout(checkDjango, 500);
       } else {
-        console.log('⚠️  Django startup verification timed out, starting Express anyway...');
-        console.log('🚀 Starting Express server...');
-        
-        const express = spawn('npm', ['run', 'start'], {
-          stdio: 'inherit',
-          shell: true,
-        });
-
-        express.on('error', (err) => {
-          console.error('❌ Express failed to start:', err);
-          process.exit(1);
-        });
-
-        express.on('close', (code) => {
-          console.log('Express exited with code', code);
-          django.kill();
-          process.exit(code);
-        });
+        console.log('⚠️  Django startup verification timed out (30 attempts), starting Express anyway...');
+        startExpress();
       }
-    };
+    });
 
-    checkDjango();
-  }, 3000);
+    req.setTimeout(500, () => {
+      req.abort();
+    });
+  };
+
+  const startExpress = () => {
+    console.log('🚀 Starting Express server...');
+    
+    const express = spawn('npm', ['run', 'start'], {
+      cwd: PROJECT_ROOT,
+      stdio: 'inherit',
+      shell: true,
+      env: { ...process.env, NODE_ENV: 'production' },
+    });
+
+    express.on('error', (err) => {
+      console.error('❌ Express failed to start:', err);
+      django.kill();
+      process.exit(1);
+    });
+
+    express.on('close', (code) => {
+      console.log('Express exited with code', code);
+      django.kill();
+      process.exit(code);
+    });
+  };
+
+  setTimeout(checkDjango, 2000);
 
   // Cleanup on exit
-  process.on('exit', () => {
+  process.on('SIGINT', () => {
+    console.log('Shutting down...');
     django.kill();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('Shutting down...');
+    django.kill();
+    process.exit(0);
   });
 });
 
@@ -106,3 +106,4 @@ migrate.on('error', (err) => {
   console.error('❌ Migration process failed:', err);
   process.exit(1);
 });
+
